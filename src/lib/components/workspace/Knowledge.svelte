@@ -9,7 +9,7 @@
 	import { onMount, getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_NAME, knowledge } from '$lib/stores';
+        import { WEBUI_NAME, knowledge } from '$lib/stores';
 	import {
 		getKnowledgeBases,
 		deleteKnowledgeById,
@@ -28,7 +28,9 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import XMark from '../icons/XMark.svelte';
 
-	let loaded = false;
+        export let basePath = '/workspace/knowledge';
+
+        let loaded = false;
 
 	let query = '';
 	let selectedItem = null;
@@ -133,13 +135,13 @@
 				<button
 					class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 					aria-label={$i18n.t('Create Knowledge')}
-					on:click={() => {
-						goto('/workspace/knowledge/create');
-					}}
-				>
-					<Plus className="size-3.5" />
-				</button>
-			</div>
+                                        on:click={() => {
+                                                goto(`${basePath}/create`);
+                                        }}
+                                >
+                                        <Plus className="size-3.5" />
+                                </button>
+                        </div>
 		</div>
 	</div>
 
@@ -155,10 +157,10 @@
 							)
 						);
 					} else {
-						goto(`/workspace/knowledge/${item.id}`);
-					}
-				}}
-			>
+                                                goto(`${basePath}/${item.id}`);
+                                        }
+                                }}
+                        >
 				<div class=" w-full">
 					<div class="flex items-center justify-between -mt-1">
 						{#if item?.meta?.document}

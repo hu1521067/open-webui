@@ -35,7 +35,7 @@
 	} from '$lib/apis/knowledge';
 	import { blobToFile } from '$lib/utils';
 
-	import Spinner from '$lib/components/common/Spinner.svelte';
+        import Spinner from '$lib/components/common/Spinner.svelte';
 	import Files from './KnowledgeBase/Files.svelte';
 	import AddFilesPlaceholder from '$lib/components/AddFilesPlaceholder.svelte';
 
@@ -68,7 +68,9 @@
 		files: any[];
 	};
 
-	let id = null;
+        export let basePath = '/workspace/knowledge';
+
+        let id = null;
 	let knowledge: Knowledge | null = null;
 	let query = '';
 
@@ -606,7 +608,7 @@
 		if (res) {
 			knowledge = res;
 		} else {
-			goto('/workspace/knowledge');
+                    goto(basePath);
 		}
 
 		const dropZone = document.querySelector('body');
