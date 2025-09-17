@@ -2661,7 +2661,7 @@ wheels = [
 ]
 
 [[package]]
-name = "open-webui"
+name = "tc-webui"
 source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
