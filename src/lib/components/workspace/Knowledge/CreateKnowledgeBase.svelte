@@ -3,13 +3,15 @@
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { createNewKnowledge, getKnowledgeBases } from '$lib/apis/knowledge';
+        import { createNewKnowledge, getKnowledgeBases } from '$lib/apis/knowledge';
 	import { toast } from 'svelte-sonner';
 	import { knowledge, user } from '$lib/stores';
 	import AccessControl from '../common/AccessControl.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
-	let loading = false;
+        export let basePath = '/workspace/knowledge';
+
+        let loading = false;
 
 	let name = '';
 	let description = '';
@@ -38,20 +40,20 @@
 		if (res) {
 			toast.success($i18n.t('Knowledge created successfully.'));
 			knowledge.set(await getKnowledgeBases(localStorage.token));
-			goto(`/workspace/knowledge/${res.id}`);
-		}
+                        goto(`${basePath}/${res.id}`);
+                }
 
-		loading = false;
-	};
+                loading = false;
+        };
 </script>
 
 <div class="w-full max-h-full">
-	<button
-		class="flex space-x-1"
-		on:click={() => {
-			goto('/workspace/knowledge');
-		}}
-	>
+        <button
+                class="flex space-x-1"
+                on:click={() => {
+                        goto(basePath);
+                }}
+        >
 		<div class=" self-center">
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

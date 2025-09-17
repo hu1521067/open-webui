@@ -54,13 +54,14 @@
 	import { getChannels, createNewChannel } from '$lib/apis/channels';
 	import ChannelModal from './Sidebar/ChannelModal.svelte';
 	import ChannelItem from './Sidebar/ChannelItem.svelte';
-	import PencilSquare from '../icons/PencilSquare.svelte';
-	import Search from '../icons/Search.svelte';
-	import SearchModal from './SearchModal.svelte';
-	import FolderModal from './Sidebar/Folders/FolderModal.svelte';
-	import Sidebar from '../icons/Sidebar.svelte';
-	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
-	import Note from '../icons/Note.svelte';
+        import PencilSquare from '../icons/PencilSquare.svelte';
+        import Search from '../icons/Search.svelte';
+        import SearchModal from './SearchModal.svelte';
+        import FolderModal from './Sidebar/Folders/FolderModal.svelte';
+        import Sidebar from '../icons/Sidebar.svelte';
+        import PinnedModelList from './Sidebar/PinnedModelList.svelte';
+        import Note from '../icons/Note.svelte';
+        import BookOpen from '../icons/BookOpen.svelte';
 	import { slide } from 'svelte/transition';
 
 	const BREAKPOINT = 768;
@@ -548,32 +549,56 @@
 			</div>
 
 			<div>
-				<div class="">
-					<Tooltip content={$i18n.t('New Chat')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/"
-							draggable="false"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
+                                <div class="">
+                                        <Tooltip content={$i18n.t('New Chat')} placement="right">
+                                                <a
+                                                        class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+                                                        href="/"
+                                                        draggable="false"
+                                                        on:click={async (e) => {
+                                                                e.stopImmediatePropagation();
+                                                                e.preventDefault();
 
-								goto('/');
-								newChatHandler();
-							}}
-							aria-label={$i18n.t('New Chat')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<PencilSquare className="size-4.5" />
-							</div>
-						</a>
-					</Tooltip>
-				</div>
+                                                                goto('/');
+                                                                newChatHandler();
+                                                        }}
+                                                        aria-label={$i18n.t('New Chat')}
+                                                >
+                                                        <div class=" self-center flex items-center justify-center size-9">
+                                                                <PencilSquare className="size-4.5" />
+                                                        </div>
+                                                </a>
+                                        </Tooltip>
+                                </div>
 
-				<div class="">
-					<Tooltip content={$i18n.t('Search')} placement="right">
-						<button
-							class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+                                {#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
+                                        <div class="">
+                                                <Tooltip content={$i18n.t('Knowledge Base')} placement="right">
+                                                        <a
+                                                                class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+                                                                href="/knowledge"
+                                                                draggable="false"
+                                                                on:click={async (e) => {
+                                                                        e.stopImmediatePropagation();
+                                                                        e.preventDefault();
+
+                                                                        goto('/knowledge');
+                                                                        await itemClickHandler();
+                                                                }}
+                                                                aria-label={$i18n.t('Knowledge Base')}
+                                                        >
+                                                                <div class=" self-center flex items-center justify-center size-9">
+                                                                        <BookOpen className="size-4.5" />
+                                                                </div>
+                                                        </a>
+                                                </Tooltip>
+                                        </div>
+                                {/if}
+
+                                <div class="">
+                                        <Tooltip content={$i18n.t('Search')} placement="right">
+                                                <button
+                                                        class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
 							on:click={(e) => {
 								e.stopImmediatePropagation();
 								e.preventDefault();
@@ -746,11 +771,11 @@
 			</div>
 
 			<div class="pb-1.5">
-				<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
-					<a
-						id="sidebar-new-chat-button"
-						class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-						href="/"
+                                <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+                                        <a
+                                                id="sidebar-new-chat-button"
+                                                class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+                                                href="/"
 						draggable="false"
 						on:click={newChatHandler}
 						aria-label={$i18n.t('New Chat')}
@@ -761,15 +786,39 @@
 
 						<div class="flex self-center translate-y-[0.5px]">
 							<div class=" self-center text-sm font-primary">{$i18n.t('New Chat')}</div>
-						</div>
-					</a>
-				</div>
+                                                </div>
+                                        </a>
+                                </div>
 
-				<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
-					<button
-						class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-						on:click={() => {
-							showSearch.set(true);
+                                {#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
+                                        <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+                                                <a
+                                                        class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+                                                        href="/knowledge"
+                                                        on:click={async (e) => {
+                                                                e.preventDefault();
+                                                                goto('/knowledge');
+                                                                await itemClickHandler();
+                                                        }}
+                                                        draggable="false"
+                                                        aria-label={$i18n.t('Knowledge Base')}
+                                                >
+                                                        <div class="self-center">
+                                                                <BookOpen className="size-4.5" />
+                                                        </div>
+
+                                                        <div class="flex self-center translate-y-[0.5px]">
+                                                                <div class=" self-center text-sm font-primary">{$i18n.t('Knowledge Base')}</div>
+                                                        </div>
+                                                </a>
+                                        </div>
+                                {/if}
+
+                                <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+                                        <button
+                                                class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+                                                on:click={() => {
+                                                        showSearch.set(true);
 						}}
 						draggable="false"
 						aria-label={$i18n.t('Search')}

@@ -1,20 +1,48 @@
 <script>
-	import { mobile, showArchivedChats, showSidebar, user } from '$lib/stores';
+        import { goto } from '$app/navigation';
+        import { onMount } from 'svelte';
+
+        import { mobile, showArchivedChats, showSidebar, user } from '$lib/stores';
 	import { getContext } from 'svelte';
 
 	const i18n = getContext('i18n');
 
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
 	import Notes from '$lib/components/notes/Notes.svelte';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Sidebar from '$lib/components/icons/Sidebar.svelte';
+        import Tooltip from '$lib/components/common/Tooltip.svelte';
+        import Sidebar from '$lib/components/icons/Sidebar.svelte';
+
+        let hasAccess = false;
+        let initialized = false;
+
+        onMount(() => {
+                const unsubscribe = user.subscribe((value) => {
+                        if (value !== undefined) {
+                                const allowed =
+                                        value?.role === 'admin' || (value?.permissions?.features?.notes ?? false);
+
+                                if (!allowed) {
+                                        goto('/');
+                                } else {
+                                        hasAccess = true;
+                                }
+
+                                initialized = true;
+                        }
+                });
+
+                return () => {
+                        unsubscribe();
+                };
+        });
 </script>
 
-<div
-	class=" flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
-		? 'md:max-w-[calc(100%-260px)]'
-		: ''} max-w-full"
->
+{#if initialized && hasAccess}
+        <div
+                class=" flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
+                        ? 'md:max-w-[calc(100%-260px)]'
+                        : ''} max-w-full"
+        >
 	<nav class="   px-2 pt-1.5 backdrop-blur-xl w-full drag-region">
 		<div class=" flex items-center">
 			{#if $mobile}
@@ -84,4 +112,5 @@
 	<div class=" pb-1 flex-1 max-h-full overflow-y-auto @container">
 		<Notes />
 	</div>
-</div>
+        </div>
+{/if}
