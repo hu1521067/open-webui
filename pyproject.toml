@@ -1,6 +1,6 @@
 [project]
 name = "tc-webui"
-description = "TC WebUI"
+description = "智能助手"
 authors = [
     { name = "Timothy Jaeryang Baek", email = "tim@tcwebui.com" }
 ]

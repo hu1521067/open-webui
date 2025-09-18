@@ -89,7 +89,7 @@
 				<div class=" self-center truncate">{$i18n.t('Settings')}</div>
 			</DropdownMenu.Item>
 
-			<DropdownMenu.Item
+			<!--<DropdownMenu.Item
 				class="flex rounded-md py-1.5 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
 				on:click={async () => {
 					show = false;
@@ -107,10 +107,10 @@
 					<ArchiveBox className="size-5" strokeWidth="1.5" />
 				</div>
 				<div class=" self-center truncate">{$i18n.t('Archived Chats')}</div>
-			</DropdownMenu.Item>
+			</DropdownMenu.Item>-->
 
 			{#if role === 'admin'}
-				<DropdownMenu.Item
+				<!--<DropdownMenu.Item
 					as="a"
 					href="/playground"
 					class="flex rounded-md py-1.5 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition select-none"
@@ -126,7 +126,7 @@
 						<Code className="size-5" strokeWidth="1.5" />
 					</div>
 					<div class=" self-center truncate">{$i18n.t('Playground')}</div>
-				</DropdownMenu.Item>
+				</DropdownMenu.Item>-->
 				<DropdownMenu.Item
 					as="a"
 					href="/admin"
@@ -146,10 +146,10 @@
 				</DropdownMenu.Item>
 			{/if}
 
-			{#if help}
+			<!--{#if help}
 				<hr class=" border-gray-50 dark:border-gray-800 my-1 p-0" />
 
-				<!-- {$i18n.t('Help')} -->
+				&lt;!&ndash; {$i18n.t('Help')} &ndash;&gt;
 
 				{#if $user?.role === 'admin'}
 					<DropdownMenu.Item
@@ -166,7 +166,7 @@
 						<div class="flex items-center">{$i18n.t('Documentation')}</div>
 					</DropdownMenu.Item>
 
-					<!-- Releases -->
+					&lt;!&ndash; Releases &ndash;&gt;
 					<DropdownMenu.Item
 						as="a"
 						target="_blank"
@@ -198,7 +198,7 @@
 					<Keyboard className="size-5" />
 					<div class="flex items-center">{$i18n.t('Keyboard shortcuts')}</div>
 				</DropdownMenu.Item>
-			{/if}
+			{/if}-->
 
 			<hr class=" border-gray-50 dark:border-gray-800 my-1 p-0" />
 

@@ -2,8 +2,8 @@
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 
-        import { goto } from '$app/navigation';
-        import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import {
 		user,
 		chats,
@@ -55,21 +55,21 @@
 	import { getChannels, createNewChannel } from '$lib/apis/channels';
 	import ChannelModal from './Sidebar/ChannelModal.svelte';
 	import ChannelItem from './Sidebar/ChannelItem.svelte';
-        import PencilSquare from '../icons/PencilSquare.svelte';
-        import Search from '../icons/Search.svelte';
-        import SearchModal from './SearchModal.svelte';
-        import FolderModal from './Sidebar/Folders/FolderModal.svelte';
-        import Sidebar from '../icons/Sidebar.svelte';
-        import PinnedModelList from './Sidebar/PinnedModelList.svelte';
-        import Note from '../icons/Note.svelte';
-        import BookOpen from '../icons/BookOpen.svelte';
+	import PencilSquare from '../icons/PencilSquare.svelte';
+	import Search from '../icons/Search.svelte';
+	import SearchModal from './SearchModal.svelte';
+	import FolderModal from './Sidebar/Folders/FolderModal.svelte';
+	import Sidebar from '../icons/Sidebar.svelte';
+	import PinnedModelList from './Sidebar/PinnedModelList.svelte';
+	import Note from '../icons/Note.svelte';
+	import BookOpen from '../icons/BookOpen.svelte';
 	import { slide } from 'svelte/transition';
 
-        const BREAKPOINT = 768;
+	const BREAKPOINT = 768;
 
-        let isAdminPage = false;
+	let isAdminPage = true;
 
-        $: isAdminPage = $page.url.pathname.startsWith('/admin');
+	// $: isAdminPage = $page.url.pathname.startsWith('/admin');
 
 	let navElement;
 	let shiftKey = false;
@@ -140,7 +140,7 @@
 			let i = 1;
 			while (
 				rootFolders.find((folder) => folder.name.toLowerCase() === `${name} ${i}`.toLowerCase())
-			) {
+				) {
 				i++;
 			}
 
@@ -329,7 +329,8 @@
 		}
 	};
 
-	const onFocus = () => {};
+	const onFocus = () => {
+	};
 
 	const onBlur = () => {
 		shiftKey = false;
@@ -554,75 +555,75 @@
 			</div>
 
 			<div>
-                                <div class="">
-                                        <Tooltip content={$i18n.t('New Chat')} placement="right">
-                                                <a
-                                                        class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-                                                        href="/"
-                                                        draggable="false"
-                                                        on:click={async (e) => {
+				<div class="">
+					<Tooltip content={$i18n.t('New Chat')} placement="right">
+						<a
+							class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							href="/"
+							draggable="false"
+							on:click={async (e) => {
                                                                 e.stopImmediatePropagation();
                                                                 e.preventDefault();
 
                                                                 goto('/');
                                                                 newChatHandler();
                                                         }}
-                                                        aria-label={$i18n.t('New Chat')}
-                                                >
-                                                        <div class=" self-center flex items-center justify-center size-9">
-                                                                <PencilSquare className="size-4.5" />
-                                                        </div>
-                                                </a>
-                                        </Tooltip>
-                                </div>
+							aria-label={$i18n.t('New Chat')}
+						>
+							<div class=" self-center flex items-center justify-center size-9">
+								<PencilSquare className="size-4.5" />
+							</div>
+						</a>
+					</Tooltip>
+				</div>
 
-                                {#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
-                                        <div class="">
-                                                <Tooltip content={$i18n.t('Knowledge Base')} placement="right">
-                                                        <a
-                                                                class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-                                                                href="/knowledge"
-                                                                draggable="false"
-                                                                on:click={async (e) => {
+				{#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
+					<div class="">
+						<Tooltip content={$i18n.t('Knowledge Base')} placement="right">
+							<a
+								class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+								href="/knowledge"
+								draggable="false"
+								on:click={async (e) => {
                                                                         e.stopImmediatePropagation();
                                                                         e.preventDefault();
 
                                                                         goto('/knowledge');
                                                                         await itemClickHandler();
                                                                 }}
-                                                                aria-label={$i18n.t('Knowledge Base')}
-                                                        >
-                                                                <div class=" self-center flex items-center justify-center size-9">
-                                                                        <BookOpen className="size-4.5" />
-                                                                </div>
-                                                        </a>
-                                                </Tooltip>
-                                        </div>
-                                {/if}
+								aria-label={$i18n.t('Knowledge Base')}
+							>
+								<div class=" self-center flex items-center justify-center size-9">
+									<BookOpen className="size-4.5" />
+								</div>
+							</a>
+						</Tooltip>
+					</div>
+				{/if}
 
-                                {#if !isAdminPage}
-                                        <div class="">
-                                                <Tooltip content={$i18n.t('Search')} placement="right">
-                                                        <button
-                                                                class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-                                                                on:click={(e) => {
+				{#if !isAdminPage}
+					<div class="">
+						<Tooltip content={$i18n.t('Search')} placement="right">
+							<button
+								class=" cursor-pointer flex rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+								on:click={(e) => {
                                                                         e.stopImmediatePropagation();
                                                                         e.preventDefault();
 
                                                                         showSearch.set(true);
                                                                 }}
-                                                                draggable="false"
-                                                                aria-label={$i18n.t('Search')}
-                                                        >
-                                                                <div class=" self-center flex items-center justify-center size-9">
-                                                                        <Search className="size-4.5" />
-                                                                </div>
-                                                        </button>
-                                                </Tooltip>
-                                        </div>
-                                {/if}
+								draggable="false"
+								aria-label={$i18n.t('Search')}
+							>
+								<div class=" self-center flex items-center justify-center size-9">
+									<Search className="size-4.5" />
+								</div>
+							</button>
+						</Tooltip>
+					</div>
+				{/if}
 
-                                {#if !isAdminPage && ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
+				{#if !isAdminPage && ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
 					<div class="">
 						<Tooltip content={$i18n.t('Notes')} placement="right">
 							<a
@@ -646,7 +647,7 @@
 					</div>
 				{/if}
 
-                                {#if !isAdminPage && ($user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools)}
+				{#if !isAdminPage && ($user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools)}
 					<div class="">
 						<Tooltip content={$i18n.t('Workspace')} placement="right">
 							<a
@@ -778,11 +779,37 @@
 			</div>
 
 			<div class="pb-1.5">
-                                <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
-                                        <a
-                                                id="sidebar-new-chat-button"
-                                                class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-                                                href="/"
+
+
+				{#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
+					<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+						<a
+							class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+							href="/knowledge"
+							on:click={async (e) => {
+                                                                e.preventDefault();
+                                                                goto('/knowledge');
+                                                                await itemClickHandler();
+                                                        }}
+							draggable="false"
+							aria-label={$i18n.t('Knowledge Base')}
+						>
+							<div class="self-center">
+								<BookOpen className="size-4.5" />
+							</div>
+
+							<div class="flex self-center translate-y-[0.5px]">
+								<div class=" self-center text-sm font-primary">{$i18n.t('Knowledge Base')}</div>
+							</div>
+						</a>
+					</div>
+				{/if}
+
+				<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+					<a
+						id="sidebar-new-chat-button"
+						class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+						href="/"
 						draggable="false"
 						on:click={newChatHandler}
 						aria-label={$i18n.t('New Chat')}
@@ -793,56 +820,32 @@
 
 						<div class="flex self-center translate-y-[0.5px]">
 							<div class=" self-center text-sm font-primary">{$i18n.t('New Chat')}</div>
-                                                </div>
-                                        </a>
-                                </div>
+						</div>
+					</a>
+				</div>
 
-                                {#if $user?.role === 'admin' || $user?.permissions?.workspace?.knowledge}
-                                        <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
-                                                <a
-                                                        class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-                                                        href="/knowledge"
-                                                        on:click={async (e) => {
-                                                                e.preventDefault();
-                                                                goto('/knowledge');
-                                                                await itemClickHandler();
-                                                        }}
-                                                        draggable="false"
-                                                        aria-label={$i18n.t('Knowledge Base')}
-                                                >
-                                                        <div class="self-center">
-                                                                <BookOpen className="size-4.5" />
-                                                        </div>
-
-                                                        <div class="flex self-center translate-y-[0.5px]">
-                                                                <div class=" self-center text-sm font-primary">{$i18n.t('Knowledge Base')}</div>
-                                                        </div>
-                                                </a>
-                                        </div>
-                                {/if}
-
-                                {#if !isAdminPage}
-                                        <div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
-                                                <button
-                                                        class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-                                                        on:click={() => {
+				{#if !isAdminPage}
+					<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
+						<button
+							class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+							on:click={() => {
                                                                 showSearch.set(true);
                                                         }}
-                                                        draggable="false"
-                                                        aria-label={$i18n.t('Search')}
-                                                >
-                                                        <div class="self-center">
-                                                                <Search strokeWidth="2" className="size-4.5" />
-                                                        </div>
+							draggable="false"
+							aria-label={$i18n.t('Search')}
+						>
+							<div class="self-center">
+								<Search strokeWidth="2" className="size-4.5" />
+							</div>
 
-                                                        <div class="flex self-center translate-y-[0.5px]">
-                                                                <div class=" self-center text-sm font-primary">{$i18n.t('Search')}</div>
-                                                        </div>
-                                                </button>
-                                        </div>
-                                {/if}
+							<div class="flex self-center translate-y-[0.5px]">
+								<div class=" self-center text-sm font-primary">{$i18n.t('Search')}</div>
+							</div>
+						</button>
+					</div>
+				{/if}
 
-                                {#if !isAdminPage && ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
+				{#if !isAdminPage && ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
 					<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
 						<a
 							class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
@@ -862,7 +865,7 @@
 					</div>
 				{/if}
 
-                                {#if !isAdminPage && ($user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools)}
+				{#if !isAdminPage && ($user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools)}
 					<div class="px-[7px] flex justify-center text-gray-800 dark:text-gray-200">
 						<a
 							class="grow flex items-center space-x-3 rounded-lg px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
@@ -1222,12 +1225,13 @@
 {/if}
 
 <style>
-	.scrollbar-hidden:active::-webkit-scrollbar-thumb,
-	.scrollbar-hidden:focus::-webkit-scrollbar-thumb,
-	.scrollbar-hidden:hover::-webkit-scrollbar-thumb {
-		visibility: visible;
-	}
-	.scrollbar-hidden::-webkit-scrollbar-thumb {
-		visibility: hidden;
-	}
+    .scrollbar-hidden:active::-webkit-scrollbar-thumb,
+    .scrollbar-hidden:focus::-webkit-scrollbar-thumb,
+    .scrollbar-hidden:hover::-webkit-scrollbar-thumb {
+        visibility: visible;
+    }
+
+    .scrollbar-hidden::-webkit-scrollbar-thumb {
+        visibility: hidden;
+    }
 </style>

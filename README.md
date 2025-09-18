@@ -116,7 +116,7 @@ TC WebUI can be installed using pip, the Python package installer. Before procee
    Open your terminal and run the following command to install TC WebUI:
 
    ```bash
-   pip install tc-webui
+   pip install . --proxy http://127.0.0.1:7897 --trusted-host pypi.org --trusted-host files.pythonhosted.org
    ```
 
 2. **Running TC WebUI**:
