@@ -3,6 +3,7 @@ import uuid
 import time
 import datetime
 import logging
+import os
 from aiohttp import ClientSession
 
 from tc_webui.models.auths import (
@@ -35,7 +36,16 @@ from tc_webui.env import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response, JSONResponse
-from tc_webui.config import OPENID_PROVIDER_URL, ENABLE_OAUTH_SIGNUP, ENABLE_LDAP
+from tc_webui.config import (
+    OPENID_PROVIDER_URL,
+    ENABLE_OAUTH_SIGNUP,
+    ENABLE_LDAP,
+    SSO_SERVER_URL,
+    SSO_CLIENT_ID,
+    SSO_CLIENT_SECRET,
+    ENABLE_UNIFIED_SSO
+)
+import aiohttp
 from pydantic import BaseModel
 
 from tc_webui.utils.misc import parse_duration, validate_email_format
@@ -1058,6 +1068,491 @@ async def generate_api_key(request: Request, user=Depends(get_current_user)):
 async def delete_api_key(user=Depends(get_current_user)):
     success = Users.update_user_api_key_by_id(user.id, None)
     return success
+
+
+############################
+# Unified Identity Authentication OAuth 2.0
+############################
+
+class UnifiedOAuthCallbackRequest(BaseModel):
+    code: str
+    state: Optional[str] = None
+    redirect_uri: str
+
+
+async def process_oauth_callback_internal(
+    request: Request,
+    form_data: UnifiedOAuthCallbackRequest
+) -> dict:
+    """
+    处理OAuth回调的核心逻辑（不涉及Response对象）
+    返回包含用户信息和token的字典
+    """
+    log.info("开始处理统一身份认证OAuth回调")
+    log.debug(f"接收到的参数: code={form_data.code[:10]}..., state={form_data.state}, redirect_uri={form_data.redirect_uri}")
+
+    # OAuth 2.0 配置
+    sso_server_url = SSO_SERVER_URL.value
+    client_id = SSO_CLIENT_ID.value
+    client_secret = SSO_CLIENT_SECRET.value
+
+    log.debug(f"SSO配置: server_url={sso_server_url}, client_id={client_id}, client_secret={'***' if client_secret else 'None'}")
+
+    if not sso_server_url or not client_id or not client_secret:
+        log.error("OAuth 2.0客户端配置不完整")
+        raise HTTPException(400, detail="OAuth 2.0客户端配置未设置")
+
+    # 1. 使用授权码获取访问令牌
+    token_url = f"{sso_server_url}/api-auth/oauth/token"
+    token_data = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": form_data.code,
+        "redirect_uri": form_data.redirect_uri
+    }
+
+    log.info(f"正在向SSO服务器请求访问令牌: {token_url}")
+    log.debug(f"请求参数: grant_type={token_data['grant_type']}, client_id={token_data['client_id']}, redirect_uri={token_data['redirect_uri']}")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(token_url, data=token_data) as token_response:
+            log.debug(f"SSO令牌响应状态: {token_response.status}")
+            if token_response.status != 200:
+                error_text = await token_response.text()
+                log.error(f"获取访问令牌失败: {token_response.status} - {error_text}")
+                log.error(f"请求URL: {token_url}")
+                log.error(f"请求数据: {token_data}")
+                raise HTTPException(400, detail=f"授权码验证失败: HTTP {token_response.status}")
+
+            token_result = await token_response.json()
+            log.debug(f"SSO令牌响应: {token_result}")
+            access_token = token_result.get("access_token")
+
+            if not access_token:
+                log.error(f"SSO响应中未找到access_token: {token_result}")
+                raise HTTPException(400, detail="未获取到访问令牌")
+
+    # 2. 使用访问令牌获取用户信息
+    check_token_url = f"{sso_server_url}/api-auth/oauth/check_token"
+    check_token_params = {
+        "token": access_token
+    }
+
+    log.info(f"正在验证访问令牌: {check_token_url}")
+    log.debug(f"访问令牌: {access_token[:20]}...")
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(check_token_url, params=check_token_params) as check_response:
+            log.debug(f"SSO令牌验证响应状态: {check_response.status}")
+            if check_response.status != 200:
+                error_text = await check_response.text()
+                log.error(f"验证令牌失败: {check_response.status} - {error_text}")
+                log.error(f"验证URL: {check_token_url}")
+                log.error(f"令牌参数: token={access_token[:20]}...")
+                raise HTTPException(400, detail=f"访问令牌验证失败: HTTP {check_response.status}")
+
+            user_data = await check_response.json()
+            log.debug(f"SSO用户信息响应: {user_data}")
+
+            if not user_data.get("active"):
+                log.error(f"SSO令牌未激活: {user_data}")
+                raise HTTPException(400, detail="访问令牌已过期或无效")
+
+    # 3. 处理用户信息并创建/更新用户
+    username = user_data.get("user_name")
+    authorities = user_data.get("authorities", [])
+    client_id = user_data.get("client_id")
+
+    log.info(f"处理SSO用户信息: username={username}, authorities={authorities}, client_id={client_id}")
+
+    if not username:
+        log.error("SSO响应中未找到用户名")
+        raise HTTPException(400, detail="未获取到用户名信息")
+
+    # 构建用户邮箱（如果SSO系统没有提供邮箱，使用用户名构建）
+    email = f"{username}@{client_id}.local" if client_id else f"{username}@sso.local"
+    log.debug(f"生成的用户邮箱: {email}")
+
+    # 检查用户是否已存在
+    user = Users.get_user_by_email(email.lower())
+    log.debug(f"用户是否已存在: {'是' if user else '否'}")
+
+    # 确定用户角色
+    role = "user"  # 默认角色
+    if "系统管理员" in authorities or "管理角色" in authorities:
+        role = "admin"
+        log.info(f"用户 {username} 具有管理员权限，分配admin角色")
+    elif not Users.has_users():
+        role = "admin"  # 第一个用户设为管理员
+        log.info(f"用户 {username} 是系统第一个用户，分配admin角色")
+    else:
+        log.info(f"用户 {username} 分配普通用户角色")
+
+    if not user:
+        # 创建新用户
+        try:
+            user = Auths.insert_new_auth(
+                email=email.lower(),
+                password=get_password_hash(str(uuid.uuid4())),  # 随机密码，不会被使用
+                name=username,
+                role=role,
+                profile_image_url="/user.png"
+            )
+
+            if not user:
+                raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
+
+            log.info(f"创建新的SSO用户: {email}")
+
+            # 发送webhook通知
+            if request.app.state.config.WEBHOOK_URL:
+                await post_webhook(
+                    request.app.state.WEBUI_NAME,
+                    request.app.state.config.WEBHOOK_URL,
+                    WEBHOOK_MESSAGES.USER_SIGNUP(user.name),
+                    {
+                        "action": "sso_signup",
+                        "message": WEBHOOK_MESSAGES.USER_SIGNUP(user.name),
+                        "user": user.model_dump_json(exclude_none=True),
+                    },
+                )
+
+        except Exception as e:
+            log.error(f"创建SSO用户失败: {e}")
+            raise HTTPException(500, detail="用户创建失败")
+    else:
+        # 更新现有用户角色（如果权限发生变化）
+        if user.role != role:
+            Users.update_user_role_by_id(user.id, role)
+            log.info(f"更新用户 {email} 的角色从 {user.role} 到 {role}")
+            user.role = role
+
+    # 4. 生成JWT令牌
+    expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+    expires_at = None
+    if expires_delta:
+        expires_at = int(time.time()) + int(expires_delta.total_seconds())
+
+    token = create_token(
+        data={"id": user.id},
+        expires_delta=expires_delta,
+    )
+
+    user_permissions = get_permissions(
+        user.id, request.app.state.config.USER_PERMISSIONS
+    )
+
+    log.info(f"SSO用户 {email} 成功登录")
+
+    return {
+        "token": token,
+        "token_type": "Bearer",
+        "expires_at": expires_at,
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "profile_image_url": user.profile_image_url,
+        "permissions": user_permissions,
+    }
+
+
+@router.post("/unified_oauth/callback", response_model=SessionUserResponse)
+async def unified_oauth_callback(
+    request: Request,
+    response: Response,
+    form_data: UnifiedOAuthCallbackRequest
+):
+    """
+    处理统一身份认证系统的OAuth 2.0授权码模式回调
+    支持外部系统页面跳转到本管理页面并根据授权码模式自动登录
+    """
+    try:
+        # 检查统一身份认证是否启用
+        if not ENABLE_UNIFIED_SSO.value:
+            log.error("统一身份认证未启用")
+            raise HTTPException(400, detail="统一身份认证未启用")
+
+        # 调用内部处理函数
+        auth_result = await process_oauth_callback_internal(request, form_data)
+
+        # 设置cookie
+        datetime_expires_at = (
+            datetime.datetime.fromtimestamp(auth_result["expires_at"], datetime.timezone.utc)
+            if auth_result.get("expires_at")
+            else None
+        )
+
+        response.set_cookie(
+            key="token",
+            value=auth_result["token"],
+            expires=datetime_expires_at,
+            httponly=False,  # Required for frontend access
+            samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
+            secure=WEBUI_AUTH_COOKIE_SECURE,
+        )
+
+        return auth_result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"统一身份认证OAuth回调处理失败: {e}")
+        raise HTTPException(500, detail="身份认证处理失败")
+
+
+@router.get("/unified_oauth/redirect")
+async def unified_oauth_redirect(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None
+):
+    """
+    处理来自统一身份认证系统的重定向回调（GET方式）
+    这个端点用于接收授权码并重定向到前端处理页面
+    """
+    try:
+        if error:
+            # 认证失败，重定向到登录页面并显示错误
+            redirect_url = f"/auth?error={error}"
+            return RedirectResponse(url=redirect_url)
+
+        if not code:
+            # 没有授权码，重定向到登录页面
+            redirect_url = "/auth?error=missing_authorization_code"
+            return RedirectResponse(url=redirect_url)
+
+        # 构建重定向URI（用于token请求）
+        base_url = str(request.base_url).rstrip('/')
+        redirect_uri = f"{base_url}/api/v1/auths/unified_oauth/redirect"
+
+        # 自动调用回调处理
+        callback_request = UnifiedOAuthCallbackRequest(
+            code=code,
+            state=state,
+            redirect_uri=redirect_uri
+        )
+
+        # 直接处理OAuth回调逻辑（不通过Response对象）
+        # 检查统一身份认证是否启用
+        if not ENABLE_UNIFIED_SSO.value:
+            log.error("统一身份认证未启用")
+            raise HTTPException(400, detail="统一身份认证未启用")
+
+        # 调用主要的OAuth处理逻辑
+        auth_result = await process_oauth_callback_internal(request, callback_request)
+
+        # 成功登录后创建重定向响应并设置cookie
+        # 使用与现有OAuth系统相同的重定向逻辑
+        redirect_base_url = str(request.app.state.config.WEBUI_URL or request.base_url)
+        if redirect_base_url.endswith("/"):
+            redirect_base_url = redirect_base_url[:-1]
+        redirect_url = f"{redirect_base_url}/auth"
+
+        redirect_response = RedirectResponse(url=redirect_url)
+
+        # 设置认证cookie（与现有OAuth系统保持一致）
+        redirect_response.set_cookie(
+            key="token",
+            value=auth_result["token"],
+            httponly=False,  # Required for frontend access
+            samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
+            secure=WEBUI_AUTH_COOKIE_SECURE,
+        )
+
+        log.info(f"SSO认证成功，设置cookie并重定向到认证页面")
+        log.debug(f"重定向URL: {redirect_url}")
+        log.debug(f"Token前20位: {auth_result['token'][:20]}...")
+
+        return redirect_response
+
+    except HTTPException as e:
+        # HTTP异常，重定向到登录页面并显示错误
+        redirect_url = f"/auth?error={e.detail}"
+        return RedirectResponse(url=redirect_url)
+    except Exception as e:
+        log.error(f"统一身份认证重定向处理失败: {e}")
+        redirect_url = "/auth?error=authentication_failed"
+        return RedirectResponse(url=redirect_url)
+
+
+############################
+# Unified SSO Configuration Management
+############################
+
+class UnifiedSSOConfig(BaseModel):
+    enable_unified_sso: bool
+    sso_server_url: str
+    sso_client_id: str
+    sso_client_secret: str
+
+
+@router.get("/admin/config/unified_sso")
+async def get_unified_sso_config(request: Request, user=Depends(get_admin_user)):
+    """获取统一身份认证配置"""
+    return {
+        "ENABLE_UNIFIED_SSO": request.app.state.config.ENABLE_UNIFIED_SSO if hasattr(request.app.state.config, 'ENABLE_UNIFIED_SSO') else False,
+        "SSO_SERVER_URL": request.app.state.config.SSO_SERVER_URL if hasattr(request.app.state.config, 'SSO_SERVER_URL') else "",
+        "SSO_CLIENT_ID": request.app.state.config.SSO_CLIENT_ID if hasattr(request.app.state.config, 'SSO_CLIENT_ID') else "",
+        "SSO_CLIENT_SECRET": "***" if (hasattr(request.app.state.config, 'SSO_CLIENT_SECRET') and request.app.state.config.SSO_CLIENT_SECRET) else ""
+    }
+
+
+@router.post("/admin/config/unified_sso")
+async def update_unified_sso_config(
+    request: Request,
+    form_data: UnifiedSSOConfig,
+    user=Depends(get_admin_user)
+):
+    """更新统一身份认证配置"""
+    try:
+        # 更新配置
+        if not hasattr(request.app.state.config, 'ENABLE_UNIFIED_SSO'):
+            request.app.state.config.ENABLE_UNIFIED_SSO = ENABLE_UNIFIED_SSO.value
+        if not hasattr(request.app.state.config, 'SSO_SERVER_URL'):
+            request.app.state.config.SSO_SERVER_URL = SSO_SERVER_URL.value
+        if not hasattr(request.app.state.config, 'SSO_CLIENT_ID'):
+            request.app.state.config.SSO_CLIENT_ID = SSO_CLIENT_ID.value
+        if not hasattr(request.app.state.config, 'SSO_CLIENT_SECRET'):
+            request.app.state.config.SSO_CLIENT_SECRET = SSO_CLIENT_SECRET.value
+
+        request.app.state.config.ENABLE_UNIFIED_SSO = form_data.enable_unified_sso
+        request.app.state.config.SSO_SERVER_URL = form_data.sso_server_url.rstrip('/')
+        request.app.state.config.SSO_CLIENT_ID = form_data.sso_client_id
+
+        # 只有在提供了新密码时才更新
+        if form_data.sso_client_secret and form_data.sso_client_secret != "***":
+            request.app.state.config.SSO_CLIENT_SECRET = form_data.sso_client_secret
+
+        # 更新持久化配置
+        ENABLE_UNIFIED_SSO.value = form_data.enable_unified_sso
+        SSO_SERVER_URL.value = form_data.sso_server_url.rstrip('/')
+        SSO_CLIENT_ID.value = form_data.sso_client_id
+        if form_data.sso_client_secret and form_data.sso_client_secret != "***":
+            SSO_CLIENT_SECRET.value = form_data.sso_client_secret
+
+        return {
+            "ENABLE_UNIFIED_SSO": request.app.state.config.ENABLE_UNIFIED_SSO,
+            "SSO_SERVER_URL": request.app.state.config.SSO_SERVER_URL,
+            "SSO_CLIENT_ID": request.app.state.config.SSO_CLIENT_ID,
+            "SSO_CLIENT_SECRET": "***" if request.app.state.config.SSO_CLIENT_SECRET else ""
+        }
+
+    except Exception as e:
+        log.error(f"更新统一身份认证配置失败: {e}")
+        raise HTTPException(500, detail="配置更新失败")
+
+
+@router.post("/admin/config/unified_sso/test")
+async def test_unified_sso_connection(
+    request: Request,
+    user=Depends(get_admin_user)
+):
+    """测试统一身份认证服务器连接"""
+    try:
+        # 获取配置
+        sso_server_url = SSO_SERVER_URL.value
+        client_id = SSO_CLIENT_ID.value
+        client_secret = SSO_CLIENT_SECRET.value
+
+        if not sso_server_url or not client_id or not client_secret:
+            return {
+                "success": False,
+                "message": "SSO配置不完整",
+                "details": {
+                    "sso_server_url": bool(sso_server_url),
+                    "client_id": bool(client_id),
+                    "client_secret": bool(client_secret)
+                }
+            }
+
+        # 测试客户端授权模式（不需要用户授权）
+        token_url = f"{sso_server_url}/api-auth/oauth/token"
+        test_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "client_credentials"
+        }
+
+        log.info(f"测试SSO连接: {token_url}")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(token_url, data=test_data, timeout=10) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return {
+                        "success": True,
+                        "message": "SSO服务器连接成功",
+                        "details": {
+                            "server_url": sso_server_url,
+                            "client_id": client_id,
+                            "token_type": result.get("token_type"),
+                            "expires_in": result.get("expires_in")
+                        }
+                    }
+                else:
+                    error_text = await response.text()
+                    return {
+                        "success": False,
+                        "message": f"SSO服务器响应错误 (HTTP {response.status})",
+                        "details": {
+                            "status_code": response.status,
+                            "error": error_text,
+                            "url": token_url
+                        }
+                    }
+
+    except aiohttp.ClientError as e:
+        return {
+            "success": False,
+            "message": "无法连接到SSO服务器",
+            "details": {
+                "error": str(e),
+                "server_url": sso_server_url
+            }
+        }
+    except Exception as e:
+        log.error(f"测试SSO连接失败: {e}")
+        return {
+            "success": False,
+            "message": "测试连接时发生错误",
+            "details": {
+                "error": str(e)
+            }
+        }
+
+
+@router.get("/debug/token")
+async def debug_token_status(request: Request):
+    """调试端点：检查当前token状态"""
+    try:
+        # 从cookie获取token
+        token_cookie = request.cookies.get("token")
+
+        # 从header获取token
+        auth_header = request.headers.get("Authorization")
+        auth_token = None
+        if auth_header and auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+
+        return {
+            "cookie_token": token_cookie[:20] + "..." if token_cookie else None,
+            "header_token": auth_token[:20] + "..." if auth_token else None,
+            "has_cookie_token": bool(token_cookie),
+            "has_header_token": bool(auth_token),
+            "cookies": dict(request.cookies),
+            "headers": {
+                "authorization": request.headers.get("Authorization"),
+                "user-agent": request.headers.get("User-Agent"),
+            }
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cookies": dict(request.cookies),
+        }
 
 
 # get api key

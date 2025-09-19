@@ -574,6 +574,34 @@ OAUTH_UPDATE_PICTURE_ON_LOGIN = PersistentConfig(
     os.environ.get("OAUTH_UPDATE_PICTURE_ON_LOGIN", "False").lower() == "true",
 )
 
+####################################
+# Unified Identity Authentication OAuth 2.0 Settings
+####################################
+
+SSO_SERVER_URL = PersistentConfig(
+    "SSO_SERVER_URL",
+    "sso.server_url",
+    os.environ.get("SSO_SERVER_URL", ""),
+)
+
+SSO_CLIENT_ID = PersistentConfig(
+    "SSO_CLIENT_ID",
+    "sso.client_id",
+    os.environ.get("SSO_CLIENT_ID", ""),
+)
+
+SSO_CLIENT_SECRET = PersistentConfig(
+    "SSO_CLIENT_SECRET",
+    "sso.client_secret",
+    os.environ.get("SSO_CLIENT_SECRET", ""),
+)
+
+ENABLE_UNIFIED_SSO = PersistentConfig(
+    "ENABLE_UNIFIED_SSO",
+    "sso.enable",
+    os.environ.get("ENABLE_UNIFIED_SSO", "False").lower() == "true",
+)
+
 
 def load_oauth_providers():
     OAUTH_PROVIDERS.clear()
