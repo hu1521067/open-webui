@@ -609,6 +609,14 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
                 detail=ERROR_MESSAGES.PASSWORD_TOO_LONG,
             )
 
+        # 在创建新用户前检查用户数量限制
+        if role != "admin":
+            limit_result = Users.enforce_user_limit(50)
+            if limit_result.get("users_removed"):
+                log.warning(f"用户数量达到限制，自动删除了 {len(limit_result['users_removed'])} 个非活跃用户")
+                for removed_user in limit_result["users_removed"]:
+                    log.info(f"自动删除用户: {removed_user['name']} ({removed_user['email']})")
+
         hashed = get_password_hash(form_data.password)
         user = Auths.insert_new_auth(
             form_data.email.lower(),
@@ -617,6 +625,13 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
             form_data.profile_image_url,
             role,
         )
+
+        # 检查管理员用户数量并发出警告
+        if user and role == "admin":
+            admin_count = Users.get_admin_users_count()
+            total_count = Users.get_num_users()
+            if total_count >= 50:
+                log.warning(f"注意：系统用户总数已达到 {total_count} 人（管理员 {admin_count} 人），接近或超过50人限制")
 
         if user:
             expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
@@ -765,6 +780,14 @@ async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
 
     try:
+        # 在创建新用户前检查用户数量限制
+        if form_data.role != "admin":
+            limit_result = Users.enforce_user_limit(50)
+            if limit_result.get("users_removed"):
+                log.warning(f"用户数量达到限制，自动删除了 {len(limit_result['users_removed'])} 个非活跃用户")
+                for removed_user in limit_result["users_removed"]:
+                    log.info(f"自动删除用户: {removed_user['name']} ({removed_user['email']})")
+
         hashed = get_password_hash(form_data.password)
         user = Auths.insert_new_auth(
             form_data.email.lower(),
@@ -773,6 +796,13 @@ async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
             form_data.profile_image_url,
             form_data.role,
         )
+
+        # 检查管理员用户数量并发出警告
+        if user and form_data.role == "admin":
+            admin_count = Users.get_admin_users_count()
+            total_count = Users.get_num_users()
+            if total_count >= 50:
+                log.warning(f"注意：系统用户总数已达到 {total_count} 人（管理员 {admin_count} 人），接近或超过50人限制")
 
         if user:
             token = create_token(data={"id": user.id})
@@ -1190,8 +1220,16 @@ async def process_oauth_callback_internal(
         log.info(f"用户 {username} 分配普通用户角色")
 
     if not user:
-        # 创建新用户
+        # 创建新用户前检查用户数量限制
         try:
+            # 检查并执行用户数量限制（只对非管理员用户执行）
+            if role != "admin":
+                limit_result = Users.enforce_user_limit(50)
+                if limit_result.get("users_removed"):
+                    log.warning(f"用户数量达到限制，自动删除了 {len(limit_result['users_removed'])} 个非活跃用户")
+                    for removed_user in limit_result["users_removed"]:
+                        log.info(f"自动删除用户: {removed_user['name']} ({removed_user['email']})")
+
             user = Auths.insert_new_auth(
                 email=email.lower(),
                 password=get_password_hash(str(uuid.uuid4())),  # 随机密码，不会被使用
@@ -1203,7 +1241,14 @@ async def process_oauth_callback_internal(
             if not user:
                 raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
 
-            log.info(f"创建新的SSO用户: {email}")
+            log.info(f"创建新的SSO用户: {email}, 角色: {role}")
+
+            # 检查管理员用户数量并发出警告
+            if role == "admin":
+                admin_count = Users.get_admin_users_count()
+                total_count = Users.get_num_users()
+                if total_count >= 50:
+                    log.warning(f"注意：系统用户总数已达到 {total_count} 人（管理员 {admin_count} 人），接近或超过50人限制")
 
             # 发送webhook通知
             if request.app.state.config.WEBHOOK_URL:
@@ -1522,6 +1567,55 @@ async def test_unified_sso_connection(
                 "error": str(e)
             }
         }
+
+
+############################
+# User Limit Management
+############################
+
+@router.get("/admin/users/stats")
+async def get_user_stats(request: Request, user=Depends(get_admin_user)):
+    """获取用户统计信息（管理员专用）"""
+    try:
+        total_users = Users.get_num_users()
+        admin_users = Users.get_admin_users_count()
+        non_admin_users = Users.get_non_admin_users_count()
+        oldest_inactive_user = Users.get_oldest_inactive_non_admin_user()
+
+        return {
+            "total_users": total_users,
+            "admin_users": admin_users,
+            "non_admin_users": non_admin_users,
+            "max_users": 50,
+            "remaining_slots": max(0, 50 - total_users),
+            "warning": total_users >= 50,
+            "oldest_inactive_user": {
+                "id": oldest_inactive_user.id,
+                "name": oldest_inactive_user.name,
+                "email": oldest_inactive_user.email,
+                "last_active_at": oldest_inactive_user.last_active_at,
+                "role": oldest_inactive_user.role
+            } if oldest_inactive_user else None
+        }
+    except Exception as e:
+        log.error(f"获取用户统计失败: {e}")
+        raise HTTPException(500, detail="获取用户统计失败")
+
+
+@router.post("/admin/users/enforce_limit")
+async def enforce_user_limit_manual(request: Request, user=Depends(get_admin_user)):
+    """手动执行用户数量限制（管理员专用）"""
+    try:
+        result = Users.enforce_user_limit(50)
+
+        return {
+            "success": True,
+            "message": f"用户限制执行完成",
+            "details": result
+        }
+    except Exception as e:
+        log.error(f"执行用户限制失败: {e}")
+        raise HTTPException(500, detail="执行用户限制失败")
 
 
 @router.get("/debug/token")

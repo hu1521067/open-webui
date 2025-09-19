@@ -444,5 +444,94 @@ class UsersTable:
             else:
                 return None
 
+    def get_oldest_inactive_non_admin_user(self) -> Optional[UserModel]:
+        """获取最久未登录的非管理员用户"""
+        try:
+            with get_db() as db:
+                # 查找非管理员用户，按最后活跃时间排序（最久未登录的在前）
+                user = (
+                    db.query(User)
+                    .filter(User.role != "admin")
+                    .order_by(User.last_active_at.asc().nulls_first())
+                    .first()
+                )
+                return UserModel.model_validate(user) if user else None
+        except Exception:
+            return None
+
+    def get_non_admin_users_count(self) -> int:
+        """获取非管理员用户数量"""
+        try:
+            with get_db() as db:
+                return db.query(User).filter(User.role != "admin").count()
+        except Exception:
+            return 0
+
+    def get_admin_users_count(self) -> int:
+        """获取管理员用户数量"""
+        try:
+            with get_db() as db:
+                return db.query(User).filter(User.role == "admin").count()
+        except Exception:
+            return 0
+
+    def enforce_user_limit(self, max_users: int = 50) -> dict:
+        """
+        执行用户数量限制
+        当用户总数超过限制时，自动删除最久未登录的非管理员用户
+
+        Args:
+            max_users: 最大用户数量，默认50
+
+        Returns:
+            dict: 包含操作结果的字典
+        """
+        try:
+            current_count = self.get_num_users()
+            result = {
+                "current_count": current_count,
+                "max_users": max_users,
+                "users_removed": [],
+                "warnings": []
+            }
+
+            if current_count <= max_users:
+                return result
+
+            # 需要删除的用户数量
+            users_to_remove = current_count - max_users
+
+            for _ in range(users_to_remove):
+                # 获取最久未登录的非管理员用户
+                oldest_user = self.get_oldest_inactive_non_admin_user()
+
+                if oldest_user:
+                    # 删除用户
+                    if self.delete_user_by_id(oldest_user.id):
+                        result["users_removed"].append({
+                            "id": oldest_user.id,
+                            "name": oldest_user.name,
+                            "email": oldest_user.email,
+                            "last_active_at": oldest_user.last_active_at
+                        })
+                    else:
+                        result["warnings"].append(f"删除用户 {oldest_user.name} 失败")
+                        break
+                else:
+                    result["warnings"].append("没有找到可删除的非管理员用户")
+                    break
+
+            result["final_count"] = self.get_num_users()
+            return result
+
+        except Exception as e:
+            return {
+                "error": str(e),
+                "current_count": self.get_num_users(),
+                "max_users": max_users,
+                "users_removed": [],
+                "warnings": []
+            }
+
 
 Users = UsersTable()
