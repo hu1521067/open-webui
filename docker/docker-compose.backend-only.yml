@@ -1,0 +1,68 @@
+services:
+  # TC WebUI Backend Only
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: tc-webui-backend
+    restart: unless-stopped
+    environment:
+      - ENV=production
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DATA_DIR=/app/data
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/webui.db}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
+      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-pending}
+      - USER_LIMIT=${USER_LIMIT:-50}
+      - ENABLE_USER_PERMISSIONS=${ENABLE_USER_PERMISSIONS:-true}
+      # SSO Configuration
+      - ENABLE_OAUTH_SIGNUP=${ENABLE_OAUTH_SIGNUP:-false}
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID:-}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET:-}
+      - OAUTH_SCOPES=${OAUTH_SCOPES:-openid email profile}
+      - OAUTH_PROVIDER_NAME=${OAUTH_PROVIDER_NAME:-统一身份认证}
+      - OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL:-}
+      # Offline mode configuration - completely bypass embedding models
+      - BYPASS_EMBEDDING_AND_RETRIEVAL=true
+      - RAG_EMBEDDING_MODEL_AUTO_UPDATE=false
+      - HF_HUB_DISABLE_TELEMETRY=1
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - DISABLE_TELEMETRY=1
+    volumes:
+      - tc_webui_data:/app/data
+      - tc_webui_cache:/tmp
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis (Optional - for caching and sessions)
+  redis:
+    image: redis:6-alpine
+    container_name: tc-webui-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - tc_webui_redis:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  tc_webui_data:
+    driver: local
+  tc_webui_cache:
+    driver: local
+  tc_webui_redis:
+    driver: local
